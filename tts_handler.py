@@ -105,3 +105,52 @@ def generate_local_audio(listen_control,generating):
             # print(f"mp3_count:{mp3_count}")
         except queue.Empty:
             continue  # 如果没有任务，继续等待
+
+
+from pathlib import Path
+import openai
+
+client_tts = openai.OpenAI(base_url="http://127.0.0.1:6006/v1", api_key="xxxxxx")
+
+# 函数：使用 edge-tts 将文本转换为语音并播放
+def text_to_speech_local(text):
+    speech_file_path = Path(__file__).parent / "speech.mp3"
+    response = client_tts.audio.speech.create(
+        model="tts-1",
+        voice="7495", # 5480  8051  
+        input=text
+    )
+    response.stream_to_file(speech_file_path)
+
+    # 从 BytesIO 对象读取 MP3 数据并播放
+    audio = AudioSegment.from_mp3("speech.mp3")
+    # 播放音频
+    play(audio)
+
+
+# 任务1-2：从句子队列中获取句子，生成音频并放入音频队列
+def generate_audio_local():
+    mp3_count = 0
+    while not stop_event.is_set():
+        try:
+            sentence = sentence_queue.get(timeout=1)  # 从句子队列中获取句子，超时时间为1秒
+            if sentence is None:  # 如果接收到 None，表示任务结束
+                break
+            # 使用 EmotiVoice 生成音频
+            # print(f"sentence[{sentence}]")
+
+            speech_file_path = Path(__file__).parent / "speech.mp3"
+            response = client_tts.audio.speech.create(
+                model="tts-1",
+                voice="7495", # 5480  8051  
+                input=sentence
+            )
+
+            file_name = "voice_history/v" + str(mp3_count) + ".mp3"
+            response.stream_to_file(file_name)
+            audio_queue.put(file_name)  # 将音频放入音频队列
+            mp3_count = mp3_count + 1
+            # print(f"mp3_count:{mp3_count}")
+        except queue.Empty:
+            continue  # 如果没有任务，继续等待
+
