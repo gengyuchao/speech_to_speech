@@ -9,12 +9,14 @@ import threading
 from queue import Queue 
 import pyttsx3
 from threading import Event
+import argparse
 
 
 output_queue = queue.Queue()
 openai_handler = OpenAIHandler()
 listen_control = Event()
 generating = Event()
+vad_handler = VADHandler(audio_enhancement=True)
 
 
 async def process_audio(audio_data):
@@ -43,7 +45,6 @@ async def process_audio(audio_data):
 
 
 async def main():
-    vad_handler = VADHandler(audio_enhancement=True)
 
     listen_control.set()
 
@@ -53,9 +54,24 @@ async def main():
 
 
 if __name__ == "__main__":
+   
+    # 解析命令行参数
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--tts-engine", choices=["edge-tts", "emotivoice"], default="emotivoice")
+    args = parser.parse_args()
 
-    threading.Thread(target=tts_handler.generate_audio).start()
-    threading.Thread(target=tts_handler.play_audio, args=(listen_control,generating,)).start()
+    # 使用选择的 TTS 引擎生成语音
+    if args.tts_engine == "edge-tts":
+        # 使用 Edge-TTS 生成语音
+        threading.Thread(target=tts_handler.generate_audio).start()
+    elif args.tts_engine == "emotivoice":
+        # 使用 EmotiVoice 生成语音
+        threading.Thread(target=tts_handler.generate_audio_local).start()
+
+    # 播放语音
+    threading.Thread(target=tts_handler.play_audio, args=(listen_control, generating,)).start()
+
+    # 本地音频直接生成并输出
     # threading.Thread(target=tts_handler_2.generate_local_audio, args=(listen_control,generating,)).start()
 
     asyncio.run(main())
