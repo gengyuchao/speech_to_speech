@@ -19,7 +19,9 @@ def is_all_special_characters(s):
 class OpenAIHandler:
     def __init__(self):
         self.chat_history = [
-            {"role": "system", "content": "你是聪明的人工智能，你的话语简洁，字符使用简体中文，不加任何特殊字符。"}]
+            {"role": "system", "content": "你是聪明的人工智能，你的话语简洁，字符使用简体中文，不加任何特殊字符。"},
+            {"role": "system", "content": "我们在进行语音对语音的对话，你的任何输出都会被转成音频，所以不要添加特殊符号或者括号。"}
+            ]
 
     def add_to_history(self, ai_response):
         self.chat_history.append({"role": "assistant", "content": ai_response})
