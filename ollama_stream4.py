@@ -71,17 +71,17 @@ class ChatHistoryManager:
             compress_interval: 每隔多少条进行一次压缩
         """
         self.model = model
-        self.history: List[Dict[str, str]] = []
+        self.history: list[dict[str, str]] = []
         self.max_history = max_history
         self.compress_interval = compress_interval
         self.total_turns = 0  # 总对话轮数
 
-    async def add_message(self, role: str, content: str):
+    def add_message(self, role: str, content: str):
         """添加单条消息到历史"""
         self.history.append({"role": role, "content": content})
         self.total_turns += 1
 
-    async def summarize_earliest(self, m: int = 5) -> Optional[str]:
+    def summarize_earliest(self, m: int = 5) -> Optional[str]:
         """用模型总结最早 m 条历史记录"""
         if len(self.history) < m:
             return None
@@ -92,12 +92,8 @@ class ChatHistoryManager:
             + "\n".join([f"{msg['role']}: {msg['content']}" for msg in to_summarize])
         )
 
-        loop = asyncio.get_event_loop()
         try:
-            response = await loop.run_in_executor(
-                None,
-                partial(ollama.chat, model=self.model, messages=[{"role": "user", "content": summary_prompt}])
-            )
+            response = ollama.chat(model=self.model, messages=[{"role": "user", "content": summary_prompt}])
             summary = response["message"]["content"]
             # 替换掉前 m 条为总结
             self.history = [{"role": "system", "content": f"[历史摘要] {summary}"}] + self.history[m:]
@@ -106,15 +102,14 @@ class ChatHistoryManager:
             print(f"历史总结失败: {e}")
             return None
 
-    async def maybe_compress_history(self):
+    def maybe_compress_history(self):
         """判断是否需要压缩历史"""
         if self.total_turns >= self.max_history and (self.total_turns % self.compress_interval == 0):
-            await self.summarize_earliest(m=self.compress_interval)
+            self.summarize_earliest(m=self.compress_interval)
 
-    async def get_messages_for_model(self) -> List[Dict[str, str]]:
+    def get_messages_for_model(self) -> list[dict[str, str]]:
         """获取当前历史作为模型输入"""
         return self.history.copy()
-
 
     def save_to_file(self, filepath: str = "history.json"):
         """将当前历史记录保存到文件"""
@@ -134,8 +129,8 @@ class ChatHistoryManager:
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.total_turns = data.get("total_turns", 0)
-                self.history = data.get("history", [])
+            self.total_turns = data.get("total_turns", 0)
+            self.history = data.get("history", [])
             print(f"[+] 已从 {filepath} 加载历史记录")
         except Exception as e:
             print(f"[!] 加载历史出错: {e}")
@@ -148,28 +143,21 @@ history_manager.load_from_file()  # 启动时尝试加载
 local_time = None
 formatted_local = None
 
-async def stream_chat(prompt, model=default_model, speaker_id="unknown"):
+def stream_chat(prompt, model=default_model, speaker_id="unknown"):
     """
-    异步流式处理函数，分离思考过程和回复内容
-    
+    流式处理函数，分离思考过程和回复内容
     Args:
         prompt: 用户输入文本
         model: 使用的模型名称
         speaker_id: 说话人标识
-        
     Yields:
         dict: 包含类型和内容的事件对象，格式为:
             {'type': 'thinking', 'content': '...'} 或
             {'type': 'response', 'content': '...'}
     """
     global local_time, formatted_local
-    # 获取当前历史
-    messages = await history_manager.get_messages_for_model()
-
     last_time = local_time
-    print(f"1 last_time : {last_time}")
     local_time = datetime.now()
-    print(f"2 last_time : {last_time}")
     formatted_local = local_time.strftime("%Y年%m月%d日%H时%M分%S秒")
 
     # 添加系统提示
@@ -186,36 +174,26 @@ async def stream_chat(prompt, model=default_model, speaker_id="unknown"):
             "content": f"当前时间是 {formatted_local}，请根据时间进行适当的回应。"
         }]
         last_time = local_time  # 更新 last_time
-    else :
+    else:
         environment_prompt = []
-        print(f"last time is {last_time}")
-        print(f"formatted_local is {formatted_local}")
-        
+
     # 构造最终 messages
+    messages = history_manager.get_messages_for_model()
     full_messages = system_prompt + messages + environment_prompt + [{"role": "user", "content": prompt}]
-
-    print(full_messages)
-
-    loop = asyncio.get_event_loop()
 
     if model == "deepseek-r1":
         think_enable = True
     else :
         think_enable = False 
 
-
     # 在线程池中执行同步的流式请求
-    response_stream = await loop.run_in_executor(
-        executor,
-        lambda: ollama.chat(
-            model=model,
-            messages=full_messages,
-            think=think_enable,
-            stream=True
-        )
+    response_stream = ollama.chat(
+        model=model,
+        messages=full_messages,
+        think=think_enable,
+        stream=True
     )
 
-    # 初始化缓冲区
     # 初始化缓冲区
     thinking_buffer = ""
     response_buffer = ""
@@ -240,14 +218,7 @@ async def stream_chat(prompt, model=default_model, speaker_id="unknown"):
                             'type': 'thinking',
                             'content': chunk.message.thinking
                         }
-                elif thinking_started and not thinking_ended:
-                    yield {
-                        'type': 'thinking',
-                        'content': '\n[思考过程结束]'
-                    }
-                    thinking_ended = True
-                    thinking_started = False
-                        
+
                 # 处理回复内容
                 if chunk.message.content:
                     response_buffer += chunk.message.content
@@ -262,7 +233,6 @@ async def stream_chat(prompt, model=default_model, speaker_id="unknown"):
             yield {'type': 'response', 'content': segmenter.buffer}
             segmenter.buffer = ""
 
- 
         # 思考结束
         if thinking_started and not thinking_ended:
             yield {
@@ -275,13 +245,13 @@ async def stream_chat(prompt, model=default_model, speaker_id="unknown"):
         yield {'type': 'error', 'content': f"流式处理异常: {str(e)}"}
     finally:
         # 保存用户输入和模型输出到历史
-        await history_manager.add_message("user", prompt)
-        await history_manager.add_message("assistant", response_buffer.strip())
-        await history_manager.maybe_compress_history()
+        history_manager.add_message("user", prompt)
+        history_manager.add_message("assistant", response_buffer.strip())
+        history_manager.maybe_compress_history()
         history_manager.save_to_file()  # 每次对话后自动保存
 
-async def chat_handle(user_prompt,speaker_name, tts_handler):
-    async for event in stream_chat(user_prompt, speaker_id=speaker_name):
+def chat_handle(user_prompt, speaker_name, tts_handler):
+    for event in stream_chat(user_prompt, speaker_id=speaker_name):
         if event['type'] == 'thinking':
             print(event['content'], end='', flush=True)
         elif event['type'] == 'response':
@@ -290,6 +260,7 @@ async def chat_handle(user_prompt,speaker_name, tts_handler):
                 tts_handler(event['content'])
         elif event['type'] == 'error':
             print(f"[错误] {event['content']}")
+
 
 # if __name__ == "__main__":
 #     asyncio.run(main())

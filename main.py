@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import ollama_stream4
 import tts_playback
 import queue
 import sys
 import threading
+import time
 
 # 确保中文输入输出正常
 import readline
@@ -20,26 +20,26 @@ def voice_input_loop(result_queue):
     print("语音识别已启动，你可以开始说话...")
 
 
-async def process_input_async(text_queue, result_queue):
-    """异步处理输入，无论来自键盘还是语音"""
+def process_input(text_queue, result_queue):
+    """处理输入，无论来自键盘还是语音"""
     while True:
-		# 尝试从两个队列中读取输入
         source, content = None, None
 
+        # 检查队列中是否有数据
         try:
-            item = text_queue.get_nowait()
+            item = text_queue.get(timeout=0.1)  # 使用 timeout 防止阻塞
             source, content = item
         except queue.Empty:
             pass
 
         try:
-            content = result_queue.get_nowait()
+            content = result_queue.get(timeout=0.1)
             source = 'voice'
         except queue.Empty:
             pass
 
         if source is None:
-            await asyncio.sleep(0.1)  # 避免 CPU 占用过高
+            time.sleep(0.01)  # 避免 CPU 占用过高
             continue
 
         if source == 'exit':
@@ -48,22 +48,10 @@ async def process_input_async(text_queue, result_queue):
         if content:
             print(f"\n收到{'语音' if source == 'voice' else '文字'}输入：{content}")
             try:
-                await ollama_stream4.chat_handle(content, "玉超", tts_playback.submit_text)
-                # await ollama_stream4.chat_handle(content, "玉超", None)
+                ollama_stream4.chat_handle(content, "玉超", tts_playback.submit_text)
+                # ollama_stream4.chat_handle(content, "玉超", None)
             except Exception as e:
                 print("LLM 处理失败：", e)
-
-
-def async_loop_worker(text_queue, result_queue):
-    """异步事件循环放到子线程中运行"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(process_input_async(text_queue, result_queue))
-    except Exception as e:
-        print("Async loop error:", e)
-    finally:
-        loop.close()
 
 
 def main():
@@ -71,17 +59,17 @@ def main():
     text_queue = queue.Queue()
     result_queue = queue.Queue()
 
-    # # 启动 TTS 和播放线程
+    # 启动 TTS 和播放线程
     tts_playback.start_tts_threads()
     tts_playback.start_play_threads()
-
-    # 启动异步处理线程（放到后台线程）
-    async_thread = threading.Thread(target=async_loop_worker, args=(text_queue, result_queue), daemon=True)
-    async_thread.start()
 
     # 启动语音识别线程（可选）
     voice_thread = threading.Thread(target=voice_input_loop, args=(result_queue,), daemon=True)
     voice_thread.start()
+
+    # 启动处理输入线程
+    process_thread = threading.Thread(target=process_input, args=(text_queue, result_queue), daemon=True)
+    process_thread.start()
 
     # 主线程处理键盘输入，保证 input() 可正常显示
     try:
