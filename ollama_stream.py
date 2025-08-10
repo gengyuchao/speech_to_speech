@@ -1,66 +1,18 @@
 import os
 import json
 import ollama
-import asyncio
-from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 from sentence_segmenter import SentenceSegmenter
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 
+# 全局工具初始化
 segmenter = SentenceSegmenter()
-
-# 创建线程池执行器用于处理同步IO
 executor = ThreadPoolExecutor(max_workers=1)
 
-default_model = "deepseek-r1" 
-default_model = "gemma3:27b" 
+# 默认模型配置
+default_model = "gemma3:27b"
 
-AI_call_func_promot = """
-辅助功能说明：
-
-### 可用功能清单
-1. 文件操作  
-   - `CREATE_FILE`：创建文件（支持参数 `metadata.overwrite`）  
-   - `DELETE_FILE`：删除文件  
-   - `READ_FILE`：读取文件内容（支持 `metadata.encoding`）  
-   - `WRITE_FILE`：写入内容（支持 `metadata.overwrite` 模式）  
-   - `UPDATE_FILE`：修改指定行（需 `metadata.line_number`）  
-2. 目录管理  
-   - `CREATE_DIR`：创建目录（支持 `metadata.recursive`）  
-   - `GET_DIR`：列出目录内容  
-3. 系统命令  
-   - `EXECUTE_COMMAND`：执行系统命令（`target` 为命令名，`metadata.command_args` 为参数列表）  
-
-### 调用方法
-- 默认用户：`user="AI"`
-- 必填字段：`operation`（操作类型）、`target`（路径）。  
-- 参数传递：通过 `metadata` 字段传递扩展参数（如 `overwrite`, `encoding`, `line_number` 等）。  
-- 内容写入：需在 `content` 字段填写文本内容。  
-
-### 示例指令
-```json
-# 写入文件
-{
-  "operation": "WRITE_FILE",
-  "target": "/tmp/example.txt",
-  "content": "Hello World",
-  "metadata": {"overwrite": true}
-}
-
-# 执行命令
-{
-  "operation": "EXECUTE_COMMAND",
-  "target": "echo",
-  "metadata": {"command_args": ["Hello", "AI"]}
-}
-
-### 注意事项
-- 路径需合法且权限充足（默认无权限，需预先配置）。  
-- 文件操作会自动创建父目录（除 `CREATE_FILE` 外）。  
-- 输出结果超过 100 字符会被截断。  
-- 权限不足或路径错误会记录失败日志。  
-"""
 
 class ChatHistoryManager:
     def __init__(self, model: str = "deepseek-r1", max_history: int = 20, compress_interval: int = 5):
@@ -135,6 +87,7 @@ class ChatHistoryManager:
         except Exception as e:
             print(f"[!] 加载历史出错: {e}")
 
+
 # 全局历史管理器实例
 history_manager = ChatHistoryManager(model=default_model, max_history=20, compress_interval=5)
 history_manager.load_from_file()  # 启动时尝试加载
@@ -143,7 +96,8 @@ history_manager.load_from_file()  # 启动时尝试加载
 local_time = None
 formatted_local = None
 
-def stream_chat(prompt, model=default_model, speaker_id="unknown"):
+
+def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unknown"):
     """
     流式处理函数，分离思考过程和回复内容
     Args:
@@ -156,35 +110,37 @@ def stream_chat(prompt, model=default_model, speaker_id="unknown"):
             {'type': 'response', 'content': '...'}
     """
     global local_time, formatted_local
+
     last_time = local_time
     local_time = datetime.now()
     formatted_local = local_time.strftime("%Y年%m月%d日%H时%M分%S秒")
 
-    # 添加系统提示
+    # 系统提示
     system_prompt = [
-        {"role": "system", "content": f"你是超强的人工智能助手钟离，你正在和 {speaker_id} 对话。"},
-        {"role": "system", "content": f"使用自然对话的说话方式，只输出中文文字和标点，不输出阿拉伯数字和特殊符号。"},
-        {"role": "system", "content": f"你可以使用 json 输出命令:{AI_call_func_promot}"},
+        {"role": "system", "content": f"你是超强的人工智能助手，你会灵活的切换钟离或者温迪的角色，你正在和 {speaker_id} 对话。默认助手角色是钟离。"},
+        {"role": "system", "content": "使用自然对话的说话方式，只输出中文文字和标点，不输出阿拉伯数字和特殊符号。"},
+        {"role": "system", "content": "请标注说话人的身份，说话格式是'[[/speaker_start]说话人[/speaker_end]]说话内容\n[/say_end]'，注意一定要添加句子结尾标识符。"},
+        {"role": "system", "content": f"示例'[[/speaker_start]钟离[/speaker_end]]你好， {speaker_id} 。\n[/say_end]'"},
+        {"role": "system", "content": "注意说话要自然，符合说话的习惯，简短回复，不要过分重复。注意用户语音输入可能有文字识别错误，尽量理解真实含义。"},
+        {"role": "system", "content": "如果用户输入无意义的内容，你应该保持语音沉默。只回复 None。"},
+        {"role": "system", "content": "识别到用户输入内容不是在和你说话，与你无关时，你应该保持语音沉默。比如没有喊你的名字时只回复 None。"},
     ]
 
-    # 判断是否需要添加时间提示
+    # 环境提示（时间）
     if last_time is None or (local_time - last_time) > timedelta(minutes=10):
         environment_prompt = [{
             "role": "system",
             "content": f"当前时间是 {formatted_local}，请根据时间进行适当的回应。"
         }]
-        last_time = local_time  # 更新 last_time
+        last_time = local_time
     else:
         environment_prompt = []
 
-    # 构造最终 messages
+    # 构造完整消息
     messages = history_manager.get_messages_for_model()
     full_messages = system_prompt + messages + environment_prompt + [{"role": "user", "content": prompt}]
 
-    if model == "deepseek-r1":
-        think_enable = True
-    else :
-        think_enable = False 
+    think_enable = model == "deepseek-r1"
 
     # 在线程池中执行同步的流式请求
     response_stream = ollama.chat(
@@ -203,6 +159,7 @@ def stream_chat(prompt, model=default_model, speaker_id="unknown"):
     try:
         # 处理流式响应
         for chunk in response_stream:
+            # print(f"chunk:{chunk}")
             if hasattr(chunk, 'message'):
                 # 处理思考过程
                 if chunk.message.thinking:
@@ -222,18 +179,22 @@ def stream_chat(prompt, model=default_model, speaker_id="unknown"):
                 # 处理回复内容
                 if chunk.message.content:
                     response_buffer += chunk.message.content
-
                     sentences = segmenter.push(chunk.message.content)
-
                     for sentence in sentences:
                         yield {'type': 'response', 'content': sentence}
 
+            # 检查是否中断
+            from tts_playback import stop_playback_flag
+            if stop_playback_flag.is_set():
+                print("[LLM 中断操作] 用户开始说话，跳过当前LLM生成")
+                break
+
         # 输出剩余内容
-        if segmenter.buffer != "":
+        if segmenter.buffer:
             yield {'type': 'response', 'content': segmenter.buffer}
             segmenter.buffer = ""
 
-        # 思考结束
+        # 结束思考
         if thinking_started and not thinking_ended:
             yield {
                 'type': 'thinking',
@@ -250,17 +211,27 @@ def stream_chat(prompt, model=default_model, speaker_id="unknown"):
         history_manager.maybe_compress_history()
         history_manager.save_to_file()  # 每次对话后自动保存
 
-def chat_handle(user_prompt, speaker_name, tts_handler):
+
+def handle_response_event(event: Dict[str, Any], speaker: str, tts_handler):
+    """处理响应事件"""
+    print(f"event: {event}")
+    if event['type'] == 'thinking':
+        print(event['content'], end='', flush=True)
+    elif event['type'] == 'response':
+        print(f"[回复内容] {event['content']}")
+        response_speaker = "unknown"
+        if event['content'].get('speaker') is not None:
+            response_speaker = event['content']['speaker']
+
+        print("response_speaker")
+        print(response_speaker)
+        if tts_handler:
+            tts_handler(event['content']['content'],response_speaker)
+    elif event['type'] == 'error':
+        print(f"[错误] {event['content']}")
+
+
+def chat_handle(user_prompt: str, speaker_name: str, tts_handler):
+    """主对话处理函数"""
     for event in stream_chat(user_prompt, speaker_id=speaker_name):
-        if event['type'] == 'thinking':
-            print(event['content'], end='', flush=True)
-        elif event['type'] == 'response':
-            print(f"[回复内容] {event['content']}")
-            if tts_handler != None:
-                tts_handler(event['content'])
-        elif event['type'] == 'error':
-            print(f"[错误] {event['content']}")
-
-
-# if __name__ == "__main__":
-#     asyncio.run(main())
+        handle_response_event(event, speaker_name, tts_handler)

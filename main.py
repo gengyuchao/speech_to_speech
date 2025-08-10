@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import ollama_stream4
+import ollama_stream
 import tts_playback
 import queue
 import sys
@@ -9,31 +9,25 @@ import time
 # 确保中文输入输出正常
 import readline
 
-# 导入语音识别模块
-from speech_recognition_task import SpeechRecognitionTask
+# 导入新的语音管理模块
+from audio_manager import AudioManager
 
 
-def voice_input_loop(result_queue):
-    """用于启动语音识别任务的函数"""
-    recognizer = SpeechRecognitionTask(result_queue)
-    recognizer.start()
-    print("语音识别已启动，你可以开始说话...")
-
-
-def process_input(text_queue, result_queue):
+def process_input(text_queue, voice_result_queue):
     """处理输入，无论来自键盘还是语音"""
     while True:
         source, content = None, None
 
-        # 检查队列中是否有数据
+        # 检查键盘输入队列
         try:
             item = text_queue.get(timeout=0.1)  # 使用 timeout 防止阻塞
             source, content = item
         except queue.Empty:
             pass
 
+        # 检查语音识别结果队列
         try:
-            content = result_queue.get(timeout=0.1)
+            content = voice_result_queue.get(timeout=0.1)
             source = 'voice'
         except queue.Empty:
             pass
@@ -48,33 +42,53 @@ def process_input(text_queue, result_queue):
         if content:
             print(f"\n收到{'语音' if source == 'voice' else '文字'}输入：{content}")
             try:
-                ollama_stream4.chat_handle(content, "玉超", tts_playback.submit_text)
-                # ollama_stream4.chat_handle(content, "玉超", None)
+                ollama_stream.chat_handle(content, "玉超", tts_playback.submit_text)
+                # ollama_stream.chat_handle(content, "玉超", None)
             except Exception as e:
                 print("LLM 处理失败：", e)
 
 
 def main():
     # 初始化队列
-    text_queue = queue.Queue()
-    result_queue = queue.Queue()
+    text_queue = queue.Queue()          # 键盘输入队列
+    voice_result_queue = queue.Queue()  # 语音识别结果队列
 
     # 启动 TTS 和播放线程
     tts_playback.start_tts_threads()
     tts_playback.start_play_threads()
 
-    # 启动语音识别线程（可选）
-    voice_thread = threading.Thread(target=voice_input_loop, args=(result_queue,), daemon=True)
-    voice_thread.start()
+    # 创建并启动音频管理器（包含语音识别功能）
+    audio_manager = AudioManager(voice_result_queue)
 
+    # 将 AudioManager 实例传递给 tts_queue
+    tts_playback.set_audio_manager(audio_manager)
+
+    audio_manager.start_listening()
+    print("语音识别已启动，你可以开始说话...")
+    
     # 启动处理输入线程
-    process_thread = threading.Thread(target=process_input, args=(text_queue, result_queue), daemon=True)
+    process_thread = threading.Thread(target=process_input, args=(text_queue, voice_result_queue), daemon=True)
     process_thread.start()
 
     # 主线程处理键盘输入，保证 input() 可正常显示
     try:
         while True:
-            user_prompt = input("请输入你的问题（按 q 退出）：")
+            user_prompt = input("请输入你的问题（按 q 退出，v+数字 调节敏感度）：")
+            
+            # 处理VAD敏感度调节命令
+            if user_prompt.strip().lower().startswith('v'):
+                try:
+                    sensitivity = float(user_prompt.strip().lower()[1:])
+                    if 0 <= sensitivity <= 1:
+                        # 直接调用 audio_manager 的方法来设置敏感度
+                        audio_manager.set_vad_sensitivity(sensitivity)
+                        print(f"VAD敏感度已设置为: {sensitivity}")
+                    else:
+                        print("敏感度值应在 0-1 之间")
+                except ValueError:
+                    print("请输入有效的数字，例如: v0.3")
+                continue
+            
             if user_prompt.strip().lower() in ['q', 'quit', 'exit']:
                 print("正在退出...")
                 text_queue.put(('exit', None))
@@ -94,6 +108,10 @@ def main():
         print("\n用户中断，退出中...")
         text_queue.put(('exit', None))
     finally:
+        # 停止音频管理器
+        audio_manager.stop_listening()
+        
+        # 停止 TTS 和播放线程
         tts_playback.stop_tts_threads()
         tts_playback.stop_play_threads()
         sys.exit(0)

@@ -1,26 +1,39 @@
 # tts_queue.py
+import sys
 from queue import Queue
 from threading import Thread
 import sounddevice as sd
 import soundfile as sf
 import uuid
 import os
+import time
+import threading
 
 from indextts.infer import IndexTTS
 from text_cleaner import TextCleaner
 
-tts = IndexTTS(model_dir="../index-tts/checkpoints",cfg_path="../index-tts/checkpoints/config.yaml")
-voice_ref = "/home/gyc/Project/index-tts/voice/钟离.mp3"
-voice_ref = "/home/gyc/Project/index-tts/voice/温迪_white.mp3"
+# tts = IndexTTS(model_dir="../index-tts/checkpoints",cfg_path="../index-tts/checkpoints/config.yaml")
+# voice_ref = "/home/gyc/Project/index-tts/voice/钟离.mp3"
+# voice_ref = "/home/gyc/Project/index-tts/voice/钟离2.wav"
+# voice_ref = "/home/gyc/Project/index-tts/voice/温迪_white.mp3"
 
 cleaner = TextCleaner()
-
 
 # 创建线程安全队列
 text_queue = Queue()
 audio_queue = Queue()
 
- # 初始化计数器
+stop_playback_flag = threading.Event()
+
+# 全局 AudioManager 引用
+g_audio_manager = None
+
+def set_audio_manager(am):
+    """设置 AudioManager 实例"""
+    global g_audio_manager
+    g_audio_manager = am
+
+# 初始化计数器
 tts_worker_counter = 1
 
 tts_kwargs = {
@@ -32,22 +45,79 @@ tts_kwargs = {
     "num_beams": 3,
     "repetition_penalty": float(10),
     "max_mel_tokens": int(600),
-    # "typical_sampling": bool(typical_sampling),
-    # "typical_mass": float(typical_mass),
 }
+
+# 不同说话人的音色配置
+SPEAKER_VOICES = {
+    "钟离": "/home/gyc/Project/index-tts/voice/钟离2.wav",
+    "温迪": "/home/gyc/Project/index-tts/voice/温迪_white.mp3",
+    "魈": "/home/gyc/Project/index-tts/voice/魈.mp3",  # 你可以添加更多角色
+    "unknown": "/home/gyc/Project/index-tts/voice/钟离2.wav",  # 默认音色
+}
+
+# 初始化TTS引擎
+tts = IndexTTS(model_dir="../index-tts/checkpoints", cfg_path="../index-tts/checkpoints/config.yaml")
 
 from pydub import AudioSegment
 from pydub.silence import detect_silence
 import argparse
+import numpy as np
+import librosa
+
+def play_audio_with_similarity_detection(audio_data, sample_rate=22050):
+    """播放音频并将其发送给相似度检测系统"""
+    global g_audio_manager
+    
+    try:
+        # 如果采样率不同，需要重采样到16kHz
+        if sample_rate != 16000:
+            # 确保输入是float32类型
+            if audio_data.dtype != np.float32:
+                audio_float = audio_data.astype(np.float32)
+            else:
+                audio_float = audio_data
+                
+            audio_data_16k = librosa.resample(audio_float, 
+                                            orig_sr=sample_rate, target_sr=16000)
+        else:
+            if audio_data.dtype != np.float32:
+                audio_data_16k = audio_data.astype(np.float32)
+            else:
+                audio_data_16k = audio_data
+        
+        # 发送音频数据给相似度检测系统
+        if g_audio_manager:
+            try:
+                g_audio_manager.add_playback_audio(audio_data_16k)
+            except Exception as e:
+                print(f"发送音频到相似度检测失败: {e}")
+    except Exception as e:
+        print(f"音频处理错误: {e}")
+
+
+def set_vad_playing(playing):
+    """设置VAD播放状态"""
+    global g_audio_manager
+    if g_audio_manager:
+        try:
+            # 使用异步方式调用
+            g_audio_manager.vad_controller.set_playing(playing)
+        except Exception as e:
+            print(f"设置VAD播放状态失败: {e}")
+
+def set_vad_sensitivity(sensitivity):
+    """设置VAD敏感度"""
+    global g_audio_manager
+    if g_audio_manager:
+        try:
+            # 使用异步方式调用
+            g_audio_manager.vad_controller.set_sensitivity(sensitivity)
+        except Exception as e:
+            print(f"设置VAD敏感度失败: {e}")
 
 def calculate_silence_ratio(file_path, silence_threshold=-50, min_silence_len=1):
     """
     计算音频文件中静音时间占总时长的比例。
-
-    :param file_path: 音频文件路径
-    :param silence_threshold: 静音的 dBFS 阈值（默认 -50）
-    :param min_silence_len: 最小静音段长度（毫秒，默认 1）
-    :return: 静音时间占比（0 到 1 之间）
     """
     # 读取音频文件
     audio = AudioSegment.from_file(file_path)
@@ -63,7 +133,7 @@ def calculate_silence_ratio(file_path, silence_threshold=-50, min_silence_len=1)
         audio,
         min_silence_len=min_silence_len,
         silence_thresh=silence_threshold,
-        seek_step=1  # 检测步长（毫秒）
+        seek_step=1
     )
 
     # 计算所有静音段的总时长
@@ -73,51 +143,115 @@ def calculate_silence_ratio(file_path, silence_threshold=-50, min_silence_len=1)
     return total_silence / total_duration
 
 def tts_worker():
-    # 使用 nonlocal 或 global 来维护计数器
     global tts_worker_counter 
     while True:
-        text = text_queue.get()
-        if text is None:
+        # 修改：从队列获取包含文本和说话人信息的元组
+        item = text_queue.get()
+        if item is None:
             break
+            
+        text, response_speaker = item
+        
+        # 根据说话人选择对应的音色文件
+        voice_ref = SPEAKER_VOICES.get(response_speaker, SPEAKER_VOICES["unknown"])
+        
         # 格式化序号，保留4位数字前缀
         filename = f"{tts_worker_counter:04d}_{uuid.uuid4()}.wav"
         output_path = f"cache/{filename}"
-        print(f"[生成语音]:{text}")
+        print(f"[生成语音] 说话人: {response_speaker}, 文本: {text}")
         tts.infer(voice_ref, text, output_path, max_text_tokens_per_sentence=120, **tts_kwargs)
-        print(f"[语音生成完毕]:{text}")
+        # print(f"[语音生成完毕] 说话人: {response_speaker}, 文本: {text}")
         
         while calculate_silence_ratio(output_path) > 0.5 :
             print(f"发现异常语音，静音比例{calculate_silence_ratio(output_path)}，重新生成")
-            print(f"[生成语音]:{text}")
+            # print(f"[生成语音] 说话人: {response_speaker}, 文本: {text}")
             tts.infer(voice_ref, text, output_path, max_text_tokens_per_sentence=120, **tts_kwargs)
-            print(f"[语音生成完毕]:{text}")
+            # print(f"[语音生成完毕] 说话人: {response_speaker}, 文本: {text}")
 
         audio_queue.put(output_path)
-        tts_worker_counter += 1  # 计数器递增
+        tts_worker_counter += 1
         text_queue.task_done()
 
 def play_worker():
+    print("播放线程循环启动")
     while True:
         path = audio_queue.get()
         if path is None:
             break
-        data, samplerate = sf.read(path)
-        print(f"[语音播放]:{path}")
-        sd.play(data, samplerate)
-        sd.wait()
-        print(f"[语音完毕]:{path}")
-        # os.remove(path)
-    audio_queue.task_done()
+
+        # 检查是否需要中断播放
+        if stop_playback_flag.is_set():
+            print("[播放中断] 用户开始说话，跳过当前语音播放")
+            stop_playback_flag.clear()
+            continue
+
+        # 设置播放状态，降低VAD敏感度
+        # print("设置播放状态，降低VAD敏感度")
+        set_vad_playing(True)
+
+        try:
+            # print(f"[语音播放]:{path}")
+            data, samplerate = sf.read(path)
+            
+            # 将播放的音频发送给相似度检测系统
+            play_audio_with_similarity_detection(data, samplerate)
+
+            # 临时重定向 stderr
+            old_stderr = sys.stderr
+            sys.stderr = open(os.devnull, 'w')
+
+            # 开始播放
+            sd.play(data, samplerate)
+ 
+
+            # 等待播放完成，但可以被中断
+            while sd.get_stream().active:
+                if stop_playback_flag.is_set():
+                    sd.stop()
+                    print("[播放中断] 用户开始说话，立即停止播放")
+                    stop_playback_flag.clear()
+                    break
+                time.sleep(0.01)
+
+           
+            # 恢复 stderr
+            sys.stderr.close()
+            sys.stderr = old_stderr
+
+            if not stop_playback_flag.is_set():
+                # print(f"[语音完毕]:{path}")
+                pass
+                
+        except Exception as e:
+            print(f"[播放错误]: {e}")
+            try:
+                sd.stop()
+            except:
+                pass
+        finally:
+            # 恢复正常VAD敏感度
+            set_vad_playing(False)
+
+    print("播放线程循环结束")
 
 def start_tts_threads():
+    print("启动TTS线程")
     tts_thread = Thread(target=tts_worker, daemon=True)
     tts_thread.start()
-    return tts_thread # , play_thread
+    return tts_thread
 
-def submit_text(text):
+def submit_text(text, response_speaker="unknown"):
+    """
+    提交文本到TTS队列
+    
+    Args:
+        text (str): 要转换的文本
+        response_speaker (str): 回答的说话人，默认为 "unknown"
+    """
     cleaned_text = cleaner.clean(text)
     if cleaned_text:
-        text_queue.put(cleaned_text)
+        # 修改：将文本和说话人信息作为一个元组放入队列
+        text_queue.put((cleaned_text, response_speaker))
     else:
         print("Clean Text cause not text to submit.")
 
@@ -125,6 +259,7 @@ def stop_tts_threads():
     text_queue.put(None)
 
 def start_play_threads():
+    print("启动播放线程")
     play_thread = Thread(target=play_worker, daemon=True)
     play_thread.start()
     return play_thread
