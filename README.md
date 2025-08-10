@@ -1,2 +1,2 @@
 # speech_to_speech
-speech to speech, use whisper.cpp to hear, LLM to think and, edge_tts or EmotiVoice to say.
+speech to speech, use whisper to hear, LLM to think and, Index-TTS to say.

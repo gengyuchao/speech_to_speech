@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# main.py
+
 import ollama_stream
 import tts_playback
 import queue
