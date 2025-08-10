@@ -1,0 +1,36 @@
+# TTS 模型路径
+tts_model_dir: "/home/gyc/Project/index-tts/checkpoints"
+tts_cfg_path: "/home/gyc/Project/index-tts/checkpoints/config.yaml"
+
+# 音频缓存目录
+cache_dir: "cache"
+
+# TTS 推理参数
+tts_kwargs:
+  do_sample: true
+  top_p: 0.8
+  top_k: 30
+  temperature: 1.0
+  length_penalty: 0.0
+  num_beams: 3
+  repetition_penalty: 10.0
+  max_mel_tokens: 600
+
+# 说话人音色映射
+speaker_voices:
+  钟离: "/home/gyc/Project/index-tts/voice/钟离2.wav"
+  温迪: "/home/gyc/Project/index-tts/voice/温迪_white.mp3"
+  魈: "/home/gyc/Project/index-tts/voice/魈.mp3"
+  unknown: "/home/gyc/Project/index-tts/voice/钟离2.wav"
+
+# VAD 设置
+vad:
+  sensitivity: 0.5   # 可调节的VAD敏感度（根据需求）
+
+# 静音检测参数
+silence_detection:
+  silence_threshold: -50
+  min_silence_len: 1
+
+# 系统参数
+worker_counter_start: 1

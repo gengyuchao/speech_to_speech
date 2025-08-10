@@ -7,15 +7,27 @@ import soundfile as sf
 import uuid
 import os
 import time
+import yaml
 import threading
 
 from indextts.infer import IndexTTS
 from text_cleaner import TextCleaner
 
-# tts = IndexTTS(model_dir="../index-tts/checkpoints",cfg_path="../index-tts/checkpoints/config.yaml")
-# voice_ref = "/home/gyc/Project/index-tts/voice/钟离.mp3"
-# voice_ref = "/home/gyc/Project/index-tts/voice/钟离2.wav"
-# voice_ref = "/home/gyc/Project/index-tts/voice/温迪_white.mp3"
+
+# 加载配置文件
+with open("config.yaml", "r", encoding="utf-8") as f:
+    config = yaml.safe_load(f)
+
+# 提取配置项
+tts_model_dir = config["tts_model_dir"]
+tts_cfg_path = config["tts_cfg_path"]
+cache_dir = config["cache_dir"]
+tts_kwargs = config["tts_kwargs"]
+SPEAKER_VOICES = config["speaker_voices"]
+vad_sensitivity = config["vad"]["sensitivity"]
+silence_threshold = config["silence_detection"]["silence_threshold"]
+min_silence_len = config["silence_detection"]["min_silence_len"]
+worker_counter_start = config["worker_counter_start"]
 
 cleaner = TextCleaner()
 
@@ -36,27 +48,9 @@ def set_audio_manager(am):
 # 初始化计数器
 tts_worker_counter = 1
 
-tts_kwargs = {
-    "do_sample": True,
-    "top_p": float(0.8),
-    "top_k": int(30),
-    "temperature": float(1),
-    "length_penalty": float(0),
-    "num_beams": 3,
-    "repetition_penalty": float(10),
-    "max_mel_tokens": int(600),
-}
-
-# 不同说话人的音色配置
-SPEAKER_VOICES = {
-    "钟离": "/home/gyc/Project/index-tts/voice/钟离2.wav",
-    "温迪": "/home/gyc/Project/index-tts/voice/温迪_white.mp3",
-    "魈": "/home/gyc/Project/index-tts/voice/魈.mp3",  # 你可以添加更多角色
-    "unknown": "/home/gyc/Project/index-tts/voice/钟离2.wav",  # 默认音色
-}
 
 # 初始化TTS引擎
-tts = IndexTTS(model_dir="../index-tts/checkpoints", cfg_path="../index-tts/checkpoints/config.yaml")
+tts = IndexTTS(model_dir=tts_model_dir, cfg_path=tts_cfg_path)
 
 from pydub import AudioSegment
 from pydub.silence import detect_silence
