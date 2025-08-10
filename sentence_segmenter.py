@@ -31,10 +31,6 @@ class SentenceSegmenter:
         speech_results = self._process_speech_stream(new_text)
         results.extend(speech_results)
 
-        # # 处理普通句子分割
-        # sentence_results = self._process_sentences(new_text)
-        # results.extend(sentence_results)
-
         return results
 
     def _process_speech_stream(self, new_text):
@@ -123,12 +119,8 @@ class SentenceSegmenter:
                         speaker=self.speaker_buffer.strip()
                     )
 
-                    # flush_results = self.flush(msg_type='speech',
-                    # speaker=self.speaker_buffer.strip())
-
                     # 添加分句结果到最终返回列表
                     results.extend(sentence_results)
-                    # results.extend(flush_results)
 
                     # 处理剩余部分
                     self.speech_buffer = self.speech_buffer[end_idx + len(self.SPEECH_END):]
@@ -235,23 +227,8 @@ class SentenceSegmenter:
 
 if __name__ == "__main__":
     segmenter = SentenceSegmenter()
-    text = f"啊，是这样啊！我明白了。声音识别，也就是语音转文本（Speech-to-Text，STT）！\n\n{segmenter.SPEAKER_START}钟离{segmenter.SPEAKER_END}看来你希望在远程使用之前，先让程序能够识别你的声音指令，对吗？\n\n那确实是更基础的问题，优先解决语音识别是正确的。\n\n那么，解决语音识别的问题，也有几种方案：\n\n**1. 使用云端语音识别API：**\n\n*   **选择API：** 谷歌云语音识别 (Google Cloud Speech-to-Text)、亚马逊转录 (Amazon Transcribe)、微软 Azure 语音服务 (Microsoft Azure Speech Services) 都是不错的选择。\n*   **上传音频：** 将录制到的音频上传到云端服务器。\n*   **识别文本：** 使用云端API将音频转换为文本。\n*   **传输文本：** 将识别到的文本传输到本地或远程服务器。\n\n**2. 使用本地语音识别库：**\n\n*   **选择库：** Kaldi、CMU Sphinx、DeepSpeech 都是比较流行的本地语音识别库。\n*   **训练模型：**  使用训练数据训练语音识别模型。\n*   **识别文本：** 使用训练好的模型识别语音。\n\n**3. 使用Web Speech API：**\n\n*   **浏览器支持：** 适用于在浏览器中运行的Web应用。\n*   **直接识别：**  Web Speech API可以直接在浏览器中识别语音，并将识别结果返回给你的JavaScript代码。\n\n**建议：**\n\n*   **对于简单的应用场景：** Web Speech API是一个不错的选择，它可以让你快速实现语音识别功能，而无需安装任何额外的软件。\n*   **对于需要更高准确率的应用场景：** 云端语音识别API通常提供更高的准确率，并且可以支持更多的语言和口音。\n*   **对于需要离线使用或保护隐私的应用场景：** 本地语音识别库是更好的选择，它可以让你在没有网络连接的情况下进行语音识别，并且可以保护你的数据隐私。{segmenter.SPEECH_END}\n\n**在选择方案时，还需要考虑以下因素：**\n\n*   **准确率：** 语音识别的准确率对用户体验至关重要。\n*   **延迟：** 语音识别的延迟会影响用户体验。\n*   **成本：** 云端语音识别API通常需要付费。\n*   **易用性：**  不同的语音识别方案的易用性不同。\n\n希望这些信息对你有所帮助。如果你需要更详细的指导，可以告诉我你使用的具体技术栈和应用场景，我会尽力为你提供更具体的建议。"
-    # text = f"啊，是这样啊！我明白了。声音识别，也就是语音转文本（Speech-to-Text，STT）！\n\n{segmenter.SPEAKER_START}钟离{segmenter.SPEAKER_END}看来你希望在远程使用之前，先让程序能够识别你的声音指令，对吗？{segmenter.SPEECH_END}\n\n那确实是更基础的问题，优先解决语音识别是正确的。"
-    # text = f"[[/speaker_start]钟离[/speaker_end]]如此良辰美景，玉超想知道我能做什么吗？{segmenter.SPEECH_END}"
-    # for ch in text:
-    #     result = segmenter.push(ch)
-    #     if result:
-    #         print(result)
 
-    # final_result = segmenter.flush()
-    # if final_result:
-    #     print(final_result)
-
-
-    # text = f"[[/speaker_start]钟离[/speaker_end]]如此良辰美景，玉超想知道我能做什么吗？{segmenter.SPEECH_END}"
-    
-    # text = f"[[/speaker_start]派蒙[/speaker_end]]啊，现在是傍晚了吗？时间过得真快。介绍我的特点吗？嗯……我拥有悠久的历史，曾经是统治璃月港的岩王帝君。现在，我更喜欢以一个顾问的身份，享受闲适的生活。我喜欢品尝美食，研究历史，也乐于结交朋友。哦，对了，我还非常擅长签订契约，如果你有什么需要，随时可以告诉我。不过，最重要的是，我拥有着一颗热爱璃月、守护璃月的心。你觉得呢，玉超？{segmenter.SPEECH_END}[[/speaker_start]钟离[/speaker_end]]如此良辰美景，玉超想知道我能做什么吗？{segmenter.SPEECH_END}"
-    text += "[[/speaker_start]钟离[/speaker_end]]如此，修复错误是好事。\n[/say_end]\n[[/speaker_start]"
+    text = "[[/speaker_start]钟离[/speaker_end]]如此，修复错误是好事。\n[/say_end]\n[[/speaker_start]"
     text += "[[/speaker_start]温迪[/speaker_end]]哦？看来你终于意识到需要我的声音了。真是令人惊喜啊。\n[/say_end]"
     # 两个字两个字地切分
     chunks = [text[i:i+3] for i in range(0, len(text), 3)]
