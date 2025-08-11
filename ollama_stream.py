@@ -8,6 +8,7 @@ LLM处理模块
 """
 import os
 import json
+import time
 import ollama
 from concurrent.futures import ThreadPoolExecutor
 from sentence_segmenter import SentenceSegmenter
@@ -50,7 +51,7 @@ class ChatHistoryManager:
         if len(self.history) < m:
             return
             
-        to_summarize = self.history[:m]
+        to_summarize = self.history[:-m]
         summary_prompt = (
             "请对以下对话历史进行简洁的总结，保留关键信息和上下文关系。\n\n"
             + "\n".join([f"{msg['role']}: {msg['content']}" for msg in to_summarize])
@@ -60,15 +61,16 @@ class ChatHistoryManager:
             response = ollama.chat(model=self.model, messages=[{"role": "user", "content": summary_prompt}])
             summary = response["message"]["content"]
             # 替换掉前 m 条为总结
-            self.history = [{"role": "system", "content": f"[历史摘要] {summary}"}] + self.history[m:]
+            self.history = [{"role": "system", "content": f"[历史摘要] {summary}"}] + self.history[-m:]
             
         except Exception as e:
             system_logger.error("历史总结失败: {}".format(e))
             
     def maybe_compress_history(self):
         """判断是否需要压缩历史"""
-        if self.total_turns >= self.max_history and (self.total_turns % self.compress_interval == 0):
+        if (self.total_turns >= self.max_history) and (self.total_turns % self.compress_interval == 0):
             self.summarize_earliest(m=self.compress_interval)
+
             
     def get_messages_for_model(self) -> list[dict[str, str]]:
         """获取当前历史作为模型输入"""
@@ -155,6 +157,10 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
     
     think_enable = model == "deepseek-r1"
     
+    # 记录LLM开始时间
+    llm_start_time = time.time()
+    token_count = 0  # 记录生成的token数量
+    
     # 在线程池中执行同步的流式请求
     response_stream = ollama.chat(
         model=model,
@@ -191,6 +197,7 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
                 # 处理回复内容
                 if chunk.message.content:
                     response_buffer += chunk.message.content
+                    token_count += len(chunk.message.content.split())  # 简单的token计数
                     sentences = segmenter.push(chunk.message.content)
                     for sentence in sentences:
                         yield {'type': 'response', 'content': sentence}
@@ -214,7 +221,22 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
             }
             thinking_ended = True
             
+        # 计算LLM总耗时
+        llm_total_time = time.time() - llm_start_time
+        # 计算处理速度
+        speed_info = f"\n[LLM生成完成] 耗时: {llm_total_time:.2f}秒"
+        if token_count > 0:
+            tokens_per_second = token_count / llm_total_time if llm_total_time > 0 else 0
+            speed_info += f", 速度: {tokens_per_second:.1f} tokens/秒"
+        
+        system_logger.info(speed_info)
+        # 也可以通过yield返回给前端显示
+        # yield {'type': 'info', 'content': speed_info}
+            
     except Exception as e:
+        # 记录异常时的耗时
+        llm_total_time = time.time() - llm_start_time
+        system_logger.error(f"[LLM异常] 耗时: {llm_total_time:.2f}秒, 错误: {str(e)}")
         yield {'type': 'error', 'content': "流式处理异常: {}".format(str(e))}
     finally:
         # 保存用户输入和模型输出到历史

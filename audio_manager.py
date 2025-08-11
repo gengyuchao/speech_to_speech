@@ -14,7 +14,7 @@ import queue
 import wave
 from collections import deque
 from vad_controller import VadController
-from asr import WhisperASR
+from asr import WhisperASR, TransformersASR
 from tts_playback import stop_playback_flag, audio_queue, text_queue
 from audio_similarity_detector import AudioSimilarityDetector
 from logger_config import system_logger
@@ -35,7 +35,8 @@ class AudioManager:
         self.result_queue = result_queue
         self.running = False
         self.vad_controller = VadController()
-        self.asr = WhisperASR()
+        # self.asr = WhisperASR()
+        self.asr = TransformersASR()
         self.enable_similarity_detector = False
         
         if self.enable_similarity_detector:

@@ -161,12 +161,32 @@ def tts_worker():
         
         system_logger.info("[生成语音] 说话人: {}, 文本: {}".format(response_speaker, text))
         
+        # 记录开始时间
+        start_time = time.time()
+        
         tts.infer(voice_ref, text, output_path, max_text_tokens_per_sentence=120, **tts_kwargs)
         
+        # 计算第一次推理耗时
+        first_infer_time = time.time() - start_time
+        total_time = first_infer_time
+        
+        retry_count = 0
         while calculate_silence_ratio(output_path) > 0.5:
             system_logger.info("发现异常语音，静音比例{}，重新生成".format(calculate_silence_ratio(output_path)))
+            retry_count += 1
+            retry_start_time = time.time()
             tts.infer(voice_ref, text, output_path, max_text_tokens_per_sentence=120, **tts_kwargs)
+            retry_time = time.time() - retry_start_time
+            total_time += retry_time
+            system_logger.info("第{}次重试耗时: {:.2f}秒".format(retry_count, retry_time))
             
+        # 记录总耗时信息
+        if retry_count > 0:
+            system_logger.debug("TTS生成完成，总耗时: {:.2f}秒 (初始: {:.2f}秒, 重试{}次: {:.2f}秒)".format(
+                total_time, first_infer_time, retry_count, total_time - first_infer_time))
+        else:
+            system_logger.info("TTS生成完成，耗时: {:.2f}秒".format(total_time))
+        
         audio_queue.put(output_path)
         tts_worker_counter += 1
         text_queue.task_done()
