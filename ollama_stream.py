@@ -1,23 +1,33 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 # ollama_stream.py
 
+"""
+LLM处理模块
+"""
 import os
 import json
 import ollama
 from concurrent.futures import ThreadPoolExecutor
 from sentence_segmenter import SentenceSegmenter
-from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
+from logger_config import system_logger
+
+# 从配置文件导入参数
+import yaml
+with open("config.yaml", "r", encoding="utf-8") as f:
+    config = yaml.safe_load(f)
 
 # 全局工具初始化
 segmenter = SentenceSegmenter()
 executor = ThreadPoolExecutor(max_workers=1)
-
-# 默认模型配置
-default_model = "gemma3:27b"
-
+default_model = config['ollama']['model']
+history_max = config['ollama']['max_history']
+history_compress_interval = config['ollama']['compress_interval']
 
 class ChatHistoryManager:
-    def __init__(self, model: str = "deepseek-r1", max_history: int = 20, compress_interval: int = 5):
+    def __init__(self, model: str = "deepseek-r1", max_history: int = history_max, compress_interval: int = history_compress_interval):
         """
         Args:
             model: 用于生成摘要的模型名称
@@ -29,42 +39,41 @@ class ChatHistoryManager:
         self.max_history = max_history
         self.compress_interval = compress_interval
         self.total_turns = 0  # 总对话轮数
-
+        
     def add_message(self, role: str, content: str):
         """添加单条消息到历史"""
         self.history.append({"role": role, "content": content})
         self.total_turns += 1
-
-    def summarize_earliest(self, m: int = 5) -> Optional[str]:
+        
+    def summarize_earliest(self, m: int = 5) -> None:
         """用模型总结最早 m 条历史记录"""
         if len(self.history) < m:
-            return None
-
+            return
+            
         to_summarize = self.history[:m]
         summary_prompt = (
             "请对以下对话历史进行简洁的总结，保留关键信息和上下文关系。\n\n"
             + "\n".join([f"{msg['role']}: {msg['content']}" for msg in to_summarize])
         )
-
+        
         try:
             response = ollama.chat(model=self.model, messages=[{"role": "user", "content": summary_prompt}])
             summary = response["message"]["content"]
             # 替换掉前 m 条为总结
             self.history = [{"role": "system", "content": f"[历史摘要] {summary}"}] + self.history[m:]
-            return summary
+            
         except Exception as e:
-            print(f"历史总结失败: {e}")
-            return None
-
+            system_logger.error("历史总结失败: {}".format(e))
+            
     def maybe_compress_history(self):
         """判断是否需要压缩历史"""
         if self.total_turns >= self.max_history and (self.total_turns % self.compress_interval == 0):
             self.summarize_earliest(m=self.compress_interval)
-
+            
     def get_messages_for_model(self) -> list[dict[str, str]]:
         """获取当前历史作为模型输入"""
         return self.history.copy()
-
+        
     def save_to_file(self, filepath: str = "history.json"):
         """将当前历史记录保存到文件"""
         with open(filepath, "w", encoding="utf-8") as f:
@@ -72,32 +81,34 @@ class ChatHistoryManager:
                 "total_turns": self.total_turns,
                 "history": self.history
             }, f, ensure_ascii=False, indent=2)
-        print(f"[+] 已保存历史到 {filepath}")
-
+            
+        system_logger.info("[+] 已保存历史到 {}".format(filepath))
+        
     def load_from_file(self, filepath: str = "history.json"):
         """从文件加载历史记录"""
         if not os.path.exists(filepath):
-            print(f"[!] 文件 {filepath} 不存在，跳过加载")
+            system_logger.info("[!] 文件 {} 不存在，跳过加载".format(filepath))
             return
-
+            
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
+                
             self.total_turns = data.get("total_turns", 0)
             self.history = data.get("history", [])
-            print(f"[+] 已从 {filepath} 加载历史记录")
+            
+            system_logger.info("[+] 已从 {} 加载历史记录".format(filepath))
+            
         except Exception as e:
-            print(f"[!] 加载历史出错: {e}")
-
+            system_logger.error("[!] 加载历史出错: {}".format(e))
 
 # 全局历史管理器实例
-history_manager = ChatHistoryManager(model=default_model, max_history=20, compress_interval=5)
+history_manager = ChatHistoryManager(model=default_model, max_history=history_max, compress_interval=history_compress_interval)
 history_manager.load_from_file()  # 启动时尝试加载
 
 # 获取当前本地时间
 local_time = None
 formatted_local = None
-
 
 def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unknown"):
     """
@@ -112,11 +123,11 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
             {'type': 'response', 'content': '...'}
     """
     global local_time, formatted_local
-
+    
     last_time = local_time
     local_time = datetime.now()
     formatted_local = local_time.strftime("%Y年%m月%d日%H时%M分%S秒")
-
+    
     # 系统提示
     system_prompt = [
         {"role": "system", "content": f"你是超强的人工智能助手，你会灵活的切换钟离或者温迪的角色，你正在和 {speaker_id} 对话。默认助手角色是钟离。"},
@@ -127,7 +138,7 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
         {"role": "system", "content": "如果用户输入无意义的内容，你应该保持语音沉默。只回复 None。"},
         {"role": "system", "content": "识别到用户输入内容不是在和你说话，与你无关时，你应该保持语音沉默。比如没有喊你的名字时只回复 None。"},
     ]
-
+    
     # 环境提示（时间）
     if last_time is None or (local_time - last_time) > timedelta(minutes=10):
         environment_prompt = [{
@@ -137,13 +148,13 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
         last_time = local_time
     else:
         environment_prompt = []
-
+        
     # 构造完整消息
     messages = history_manager.get_messages_for_model()
     full_messages = system_prompt + messages + environment_prompt + [{"role": "user", "content": prompt}]
-
+    
     think_enable = model == "deepseek-r1"
-
+    
     # 在线程池中执行同步的流式请求
     response_stream = ollama.chat(
         model=model,
@@ -151,17 +162,16 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
         think=think_enable,
         stream=True
     )
-
+    
     # 初始化缓冲区
     thinking_buffer = ""
     response_buffer = ""
     thinking_started = False
     thinking_ended = False
-
+    
     try:
         # 处理流式响应
         for chunk in response_stream:
-            # print(f"chunk:{chunk}")
             if hasattr(chunk, 'message'):
                 # 处理思考过程
                 if chunk.message.thinking:
@@ -177,25 +187,25 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
                             'type': 'thinking',
                             'content': chunk.message.thinking
                         }
-
+                        
                 # 处理回复内容
                 if chunk.message.content:
                     response_buffer += chunk.message.content
                     sentences = segmenter.push(chunk.message.content)
                     for sentence in sentences:
                         yield {'type': 'response', 'content': sentence}
-
+                        
             # 检查是否中断
             from tts_playback import stop_playback_flag
             if stop_playback_flag.is_set():
-                print("[LLM 中断操作] 用户开始说话，跳过当前LLM生成")
+                system_logger.info("[LLM 中断操作] 用户开始说话，跳过当前LLM生成")
                 break
-
+                
         # 输出剩余内容
         if segmenter.buffer:
             yield {'type': 'response', 'content': segmenter.buffer}
             segmenter.buffer = ""
-
+            
         # 结束思考
         if thinking_started and not thinking_ended:
             yield {
@@ -203,9 +213,9 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
                 'content': '\n[思考过程结束]'
             }
             thinking_ended = True
-
+            
     except Exception as e:
-        yield {'type': 'error', 'content': f"流式处理异常: {str(e)}"}
+        yield {'type': 'error', 'content': "流式处理异常: {}".format(str(e))}
     finally:
         # 保存用户输入和模型输出到历史
         history_manager.add_message("user", prompt)
@@ -213,25 +223,24 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
         history_manager.maybe_compress_history()
         history_manager.save_to_file()  # 每次对话后自动保存
 
-
-def handle_response_event(event: Dict[str, Any], speaker: str, tts_handler):
+def handle_response_event(event: dict, speaker: str, tts_handler):
     """处理响应事件"""
-    print(f"event: {event}")
+    system_logger.debug("event: {}".format(event))
+    
     if event['type'] == 'thinking':
         print(event['content'], end='', flush=True)
     elif event['type'] == 'response':
-        print(f"[回复内容] {event['content']}")
+        print("[回复内容] {}".format(event['content']))
         response_speaker = "unknown"
         if event['content'].get('speaker') is not None:
             response_speaker = event['content']['speaker']
-
-        print("response_speaker")
-        print(response_speaker)
+        system_logger.debug("response_speaker")
+        system_logger.debug(response_speaker)
+        
         if tts_handler:
-            tts_handler(event['content']['content'],response_speaker)
+            tts_handler(event['content']['content'], response_speaker)
     elif event['type'] == 'error':
-        print(f"[错误] {event['content']}")
-
+        print("[错误] {}".format(event['content']))
 
 def chat_handle(user_prompt: str, speaker_name: str, tts_handler):
     """主对话处理函数"""
