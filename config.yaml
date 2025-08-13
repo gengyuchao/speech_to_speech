@@ -1,8 +1,8 @@
 
 # 系统配置文件
 tts:
-  model_dir: "/home/gyc/Project/index-tts/checkpoints"
-  cfg_path: "/home/gyc/Project/index-tts/checkpoints/config.yaml"
+  model_dir: "resources/checkpoints"
+  cfg_path: "resources/checkpoints/config.yaml"
   cache_dir: "./cache"
   kwargs:
     do_sample: true
@@ -15,10 +15,12 @@ tts:
     max_mel_tokens: 600
 
 speaker_voices:
-  "钟离": "/home/gyc/Project/index-tts/voice/钟离2.wav"
-  "温迪": "/home/gyc/Project/index-tts/voice/温迪_white.mp3"
+  "钟离": "resources/voice/钟离2.wav"
+  "温迪": "resources/voice/温迪.mp3"
+  "可莉": "resources/voice/可莉3.mp3"
+  "胡桃": "resources/voice/胡桃.mp3"
   "玉超": "./voices/yuchao.wav"
-  "unknown": "/home/gyc/Project/index-tts/voice/钟离2.wav"
+  "unknown": "resources/voice/钟离2.wav"
 
 vad:
   sensitivity: 0.6
@@ -31,8 +33,8 @@ silence_detection:
 worker_counter_start: 1
 
 ollama:
-  # model: "gemma3:27b"
-  model: "qwen3:32b"
+  model: "gemma3:27b"
+  # model: "qwen3:32b"
   max_history: 30
   compress_interval: 20
 

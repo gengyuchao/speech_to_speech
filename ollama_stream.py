@@ -132,7 +132,7 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
     
     # 系统提示
     system_prompt = [
-        {"role": "system", "content": f"你是超强的人工智能助手，你会灵活的切换钟离或者温迪的角色，你正在和 {speaker_id} 对话。默认助手角色是钟离。"},
+        {"role": "system", "content": f"你是超强的人工智能助手，你会灵活的切换钟离、温迪、胡桃、或者可莉的角色，你正在和 {speaker_id} 对话。默认助手角色是钟离。"},
         {"role": "system", "content": "使用自然对话的说话方式，只输出中文文字和标点，不输出阿拉伯数字和特殊符号。"},
         {"role": "system", "content": "请标注说话人的身份，说话格式是'[[/speaker_start]说话人[/speaker_end]]说话内容\n[/say_end]'，注意一定要添加句子结尾标识符。"},
         {"role": "system", "content": f"示例'[[/speaker_start]钟离[/speaker_end]]你好， {speaker_id} 。\n[/say_end]'"},
@@ -256,11 +256,13 @@ def handle_response_event(event: dict, speaker: str, tts_handler):
         response_speaker = "unknown"
         if event['content'].get('speaker') is not None:
             response_speaker = event['content']['speaker']
+
+            if tts_handler:
+                tts_handler(event['content']['content'], response_speaker)
+
         system_logger.debug("response_speaker")
         system_logger.debug(response_speaker)
-        
-        if tts_handler:
-            tts_handler(event['content']['content'], response_speaker)
+
     elif event['type'] == 'error':
         print("[错误] {}".format(event['content']))
 
