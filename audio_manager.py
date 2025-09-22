@@ -164,7 +164,7 @@ class AudioManager:
                                 text = self.asr.transcribe(
                                     filename,
                                     language="zh",
-                                    prompt="这是钟离、温迪和玉超在进行的人工智能方面的技术讨论，其中包括 whisper 和 LLM 模型的内容。输出需要带标点符号。"
+                                    prompt=config['asr_prompt']
                                 )
                                 system_logger.info("识别结果：{}".format(text))
                                 self.result_queue.put(text)

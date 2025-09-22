@@ -132,20 +132,20 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
     
     # 系统提示
     system_prompt = [
-        {"role": "system", "content": f"你是超强的人工智能助手，你会灵活的切换钟离、温迪、胡桃、或者可莉的角色，你正在和 {speaker_id} 对话。默认助手角色是钟离。"},
-        {"role": "system", "content": "使用自然对话的说话方式，只输出中文文字和标点，不输出阿拉伯数字和特殊符号。"},
-        {"role": "system", "content": "请标注说话人的身份，说话格式是'[[/speaker_start]说话人[/speaker_end]]说话内容\n[/say_end]'，注意一定要添加句子结尾标识符。"},
-        {"role": "system", "content": f"示例'[[/speaker_start]钟离[/speaker_end]]你好， {speaker_id} 。\n[/say_end]'"},
-        {"role": "system", "content": "注意说话要自然，符合说话的习惯，简短回复，不要过分重复。注意用户语音输入可能有文字识别错误，尽量理解真实含义。"},
-        {"role": "system", "content": "如果用户输入无意义的内容，你应该保持语音沉默。只回复 None。"},
-        {"role": "system", "content": "识别到用户输入内容不是在和你说话，与你无关时，你应该保持语音沉默。比如没有喊你的名字时只回复 None。"},
+        {"role": "system", "content": config['ai_prompts']['system_role'].format(speaker_id=speaker_id)},
+        {"role": "system", "content": config['ai_prompts']['speaking_format']},
+        {"role": "system", "content": config['ai_prompts']['speaker_format']},
+        {"role": "system", "content": config['ai_prompts']['example'].format(speaker_id=speaker_id)},
+        {"role": "system", "content": config['ai_prompts']['natural_response']},
+        {"role": "system", "content": config['ai_prompts']['silence_if_irrelevant']},
+        {"role": "system", "content": config['ai_prompts']['silence_if_not_spoken_to']},
     ]
     
     # 环境提示（时间）
     if last_time is None or (local_time - last_time) > timedelta(minutes=10):
         environment_prompt = [{
             "role": "system",
-            "content": f"当前时间是 {formatted_local}，请根据时间进行适当的回应。"
+            "content": config['ai_prompts']['time_context'].format(current_time=formatted_local)
         }]
         last_time = local_time
     else:

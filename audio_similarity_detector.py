@@ -2,6 +2,11 @@
 
 import numpy as np
 from collections import deque
+import yaml
+
+# 从配置文件导入参数
+with open("config.yaml", "r", encoding="utf-8") as f:
+    config = yaml.safe_load(f)
 
 class AudioSimilarityDetector:
     def __init__(self, sample_rate=16000, buffer_duration=2.0):
@@ -19,11 +24,11 @@ class AudioSimilarityDetector:
         
         # 音频特征参数
         self.fingerprint_size = 1024  # 指纹大小
-        self.similarity_threshold = 0.85  # 相似度阈值
+        self.similarity_threshold = config['audio_similarity']['similarity_threshold']  # 相似度阈值
         
         # 静音检测参数
-        self.silence_threshold = 0.01  # 静音阈值 (归一化幅度)
-        self.silence_ratio_threshold = 0.95  # 静音比例阈值 (95%以上为静音)
+        self.silence_threshold = config['audio_similarity']['silence_threshold']  # 静音阈值 (归一化幅度)
+        self.silence_ratio_threshold = config['audio_similarity']['silence_ratio_threshold']  # 静音比例阈值 (95%以上为静音)
         
     def is_silent_audio(self, audio_data, threshold=None, ratio_threshold=None):
         """

@@ -129,8 +129,8 @@ def calculate_silence_ratio(file_path, silence_threshold=-50, min_silence_len=1)
     # 检测所有静音段
     silence_periods = detect_silence(
         audio,
-        min_silence_len=min_silence_len,
-        silence_thresh=silence_threshold,
+        min_silence_len=config['silence_detection']['min_silence_len'],
+        silence_thresh=config['silence_detection']['silence_threshold'],
         seek_step=1
     )
     
@@ -171,7 +171,7 @@ def tts_worker():
         total_time = first_infer_time
         
         retry_count = 0
-        while calculate_silence_ratio(output_path) > 0.5:
+        while calculate_silence_ratio(output_path) > config['audio_similarity']['silence_ratio_threshold']:
             system_logger.info("发现异常语音，静音比例{}，重新生成".format(calculate_silence_ratio(output_path)))
             retry_count += 1
             retry_start_time = time.time()

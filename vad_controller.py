@@ -7,13 +7,18 @@ VAD控制器模块
 """
 import threading
 import queue
+import yaml
 from logger_config import system_logger
+
+# 从配置文件导入参数
+with open("config.yaml", "r", encoding="utf-8") as f:
+    config = yaml.safe_load(f)
 
 class VadController:
     def __init__(self):
-        self._sensitivity = 0.6
+        self._sensitivity = config['vad']['sensitivity']
         self._is_playing = False
-        self._play_sensitivity_factor = 0.2
+        self._play_sensitivity_factor = config['vad']['play_sensitivity_factor']
         self._lock = threading.RLock()  # 使用可重入锁
         self._command_queue = queue.Queue()  # 命令队列
         self._running = True

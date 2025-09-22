@@ -1,6 +1,11 @@
 import logging
 import os
 from pathlib import Path
+import yaml
+
+# 从配置文件导入参数
+with open("config.yaml", "r", encoding="utf-8") as f:
+    config = yaml.safe_load(f)
 
 def setup_logger(name, log_file, level=logging.INFO):
     """设置日志记录器"""
@@ -26,4 +31,4 @@ def setup_logger(name, log_file, level=logging.INFO):
     return logger
 
 # 创建全局日志记录器
-system_logger = setup_logger("System", "./logs/system.log", logging.INFO)
+system_logger = setup_logger("System", config['logging']['file'], getattr(logging, config['logging']['level']))
