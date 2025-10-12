@@ -16,7 +16,8 @@ import os
 import time
 import yaml
 import threading
-from indextts.infer import IndexTTS
+# from indextts.infer import IndexTTS
+from indextts.infer_v2 import IndexTTS2
 from text_cleaner import TextCleaner
 from logger_config import system_logger
 
@@ -54,7 +55,8 @@ def set_audio_manager(am):
 tts_worker_counter = worker_counter_start
 
 # 初始化TTS引擎
-tts = IndexTTS(model_dir=tts_model_dir, cfg_path=tts_cfg_path)
+# tts = IndexTTS(model_dir=tts_model_dir, cfg_path=tts_cfg_path)
+tts = IndexTTS2(model_dir=tts_model_dir, cfg_path=tts_cfg_path, use_fp16=False, use_cuda_kernel=False, use_deepspeed=False)
 
 from pydub import AudioSegment
 from pydub.silence import detect_silence
@@ -164,7 +166,7 @@ def tts_worker():
         # 记录开始时间
         start_time = time.time()
         
-        tts.infer(voice_ref, text, output_path, max_text_tokens_per_sentence=120, **tts_kwargs)
+        tts.infer(voice_ref, text, output_path, **tts_kwargs)
         
         # 计算第一次推理耗时
         first_infer_time = time.time() - start_time
