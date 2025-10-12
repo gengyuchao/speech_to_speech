@@ -56,7 +56,7 @@ tts_worker_counter = worker_counter_start
 
 # 初始化TTS引擎
 # tts = IndexTTS(model_dir=tts_model_dir, cfg_path=tts_cfg_path)
-tts = IndexTTS2(model_dir=tts_model_dir, cfg_path=tts_cfg_path, use_fp16=False, use_cuda_kernel=False, use_deepspeed=False)
+tts = IndexTTS2(model_dir=tts_model_dir, cfg_path=tts_cfg_path, use_fp16=True, use_cuda_kernel=False, use_deepspeed=False)
 
 from pydub import AudioSegment
 from pydub.silence import detect_silence

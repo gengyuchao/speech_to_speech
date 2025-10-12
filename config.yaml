@@ -41,6 +41,7 @@ worker_counter_start: 1
 ollama:
   model: "gemma3:27b"
   # model: "qwen3:32b"
+  # model: "deepseek-r1:latest"
   max_history: 30
   compress_interval: 20
 

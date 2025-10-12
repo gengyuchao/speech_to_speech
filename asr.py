@@ -1,8 +1,10 @@
 # asr.py
-import whisper
+# import whisper
+from faster_whisper import WhisperModel
 import wave
 import torch
 import yaml
+from logger_config import system_logger
 
 # 从配置文件导入参数
 with open("config.yaml", "r", encoding="utf-8") as f:
@@ -16,6 +18,18 @@ class WhisperASR:
         result = self.model.transcribe(audio_file, language=language, prompt=prompt)
         return result["text"]
 
+
+class FasterWhisperASR:
+    def __init__(self, model_name="large-v3-turbo"):
+        self.model = WhisperModel(model_name, device="cuda", compute_type="int8_float16") # "float16"
+
+    def transcribe(self, audio_file, language="zh", prompt=config['asr_prompt']):
+        segments, info =  self.model.transcribe(audio_file, language=language, initial_prompt=prompt, beam_size=5)
+        result = ""
+        for segment in segments:
+            system_logger.info("[%.2fs -> %.2fs] %s" % (segment.start, segment.end, segment.text))
+            result += segment.text
+        return result
 
 from transformers import pipeline
 
