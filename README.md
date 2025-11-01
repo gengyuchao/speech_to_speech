@@ -25,6 +25,7 @@
 - ✅ **语音相似度检测**：避免播放内容被误识别为用户输入
 - ✅ **对话历史管理与压缩**：自动保存和总结历史记录
 - ✅ **可调敏感度控制**：通过命令 `v0.3` 调整 VAD 敏感度
+- ✅ **多角色音色支持**：支持多种角色音色，包括钟离、温迪、可莉、胡桃等
 
 ---
 
@@ -71,19 +72,90 @@ torch.hub.load(repo_or_dir='snakers4/silero-vad', model='silero_vad')
 编辑 `config.yaml` 来设置 TTS 参数、缓存路径等：
 
 ```yaml
-tts_model_dir: ./models/index-tts
-tts_cfg_path: ./models/index-tts/config.yaml
-cache_dir: ./cache
+tts:
+  model_dir: "resources/checkpoints"
+  cfg_path: "resources/checkpoints/config.yaml"
+  cache_dir: "./cache"
+  kwargs:
+    do_sample: true
+    top_p: 0.8
+    top_k: 30
+    temperature: 1.0
+    length_penalty: 0.0
+    num_beams: 3
+    repetition_penalty: 10.0
+    max_mel_tokens: 600
+
 speaker_voices:
-  unknown: ./voices/default.wav
-  玉超: ./voices/yuchao.wav
-  钟离: ./voices/zhongli.wav
-  温迪: ./voices/wendi.wav
+  "钟离": "resources/voice/钟离2.wav"
+  "温迪": "resources/voice/温迪.mp3"
+  "可莉": "resources/voice/可莉3.mp3"
+  "胡桃": "resources/voice/胡桃.mp3"
+  "玉超": "./voices/yuchao.wav"
+  "unknown": "resources/voice/钟离2.wav"
+
 vad:
   sensitivity: 0.6
+  play_sensitivity_factor: 0.2
+
+asr:
+  model_path: "resources/Belle-whisper-large-v3-turbo-zh"
+  device: null  # null表示自动选择设备
+
+# ASR提示词配置
+asr_prompt: "这是钟离、温迪和玉超在进行的人工智能方面的技术讨论，其中包括 whisper 和 LLM 模型的内容。输出需要带标点符号。"
+
 silence_detection:
   silence_threshold: -50
   min_silence_len: 1000
+
+worker_counter_start: 1
+
+ollama:
+  model: "gemma3:27b"
+  # model: "qwen3:32b"
+  # model: "deepseek-r1:latest"
+  max_history: 30
+  compress_interval: 20
+
+audio:
+  format: "paInt16"
+  channels: 1
+  rate: 16000
+  chunk: 512
+  silence_frame_threshold: 20
+
+audio_similarity:
+  similarity_threshold: 0.85
+  silence_threshold: 0.01
+  silence_ratio_threshold: 0.95
+  fingerprint_size: 1024
+
+logging:
+  level: "INFO"
+  file: "./logs/system.log"
+
+# AI提示词配置
+ai_prompts:
+  system_role: "你是超强的人工智能助手，你会灵活的切换钟离、温迪、胡桃、或者可莉的角色，你正在和 {speaker_id} 对话。默认助手角色是钟离。"
+  speaking_format: "使用自然对话的说话方式，只输出中文文字和标点，不输出阿拉伯数字和特殊符号。"
+  speaker_format: "请标注说话人的身份，说话格式是'[[/speaker_start]说话人[/speaker_end]]说话内容\n[/say_end]'，注意一定要添加句子结尾标识符。"
+  example: "示例'[[/speaker_start]钟离[/speaker_end]]你好， {speaker_id} 。\n[/say_end]'"
+  natural_response: "注意说话要自然，符合说话的习惯，简短回复，不要过分重复。注意用户语音输入可能有文字识别错误，尽量理解真实含义。"
+  silence_if_irrelevant: "如果用户输入无意义的内容，你应该保持语音沉默。只回复 None。"
+  silence_if_not_spoken_to: "识别到用户输入内容不是在和你说话，与你无关时，你应该保持语音沉默。比如没有喊你的名字时只回复 None。"
+  time_context: "当前时间是 {current_time}，请根据时间进行适当的回应。"
+
+# TTS配置
+tts_config:
+  max_mel_tokens: 600
+  do_sample: true
+  top_p: 0.8
+  top_k: 30
+  temperature: 1.0
+  length_penalty: 0.0
+  num_beams: 3
+  repetition_penalty: 10.0
 ```
 
 ### 4️⃣ 启动程序
@@ -119,7 +191,7 @@ python main.py
 ## 🧠 工作流程图
 
 ```text
-[用户说话] 
+[用户说话]
      ↓
  [语音识别 → Whisper]
      ↓
@@ -151,6 +223,8 @@ python main.py
 ├── vad_controller.py       # VAD 控制器，支持动态调整敏感度
 ├── config.yaml             # 系统配置文件
 ├── environment.yml         # Conda 环境配置文件
+├── asr.py                  # 语音识别模块
+├── logger_config.py        # 日志配置模块
 └── requirements.txt        # Python 依赖项（供参考）
 ```
 
@@ -179,8 +253,8 @@ python main.py
 
 ## 📄 License
 
-MIT License. See `LICENSE` for more information.
+MIT License. See `LICENSE` for more information。
 
---- 
+---
 
 > 💡 **提示**：建议配合耳机/音响使用，以获得更好的语音体验。
