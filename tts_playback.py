@@ -60,35 +60,6 @@ import argparse
 import numpy as np
 import librosa
 
-def play_audio_with_similarity_detection(audio_data, sample_rate=22050):
-    """播放音频并将其发送给相似度检测系统"""
-    global g_audio_manager
-    
-    try:
-        # 如果采样率不同，需要重采样到16kHz
-        if sample_rate != 16000:
-            # 确保输入是float32类型
-            if audio_data.dtype != np.float32:
-                audio_float = audio_data.astype(np.float32)
-            else:
-                audio_float = audio_data
-                
-            audio_data_16k = librosa.resample(audio_float,
-                                            orig_sr=sample_rate, target_sr=16000)
-        else:
-            if audio_data.dtype != np.float32:
-                audio_data_16k = audio_data.astype(np.float32)
-            else:
-                audio_data_16k = audio_data
-                
-        # 发送音频数据给相似度检测系统
-        if g_audio_manager:
-            try:
-                g_audio_manager.add_playback_audio(audio_data_16k)
-            except Exception as e:
-                system_logger.error("发送音频到相似度检测失败: {}".format(e))
-    except Exception as e:
-        system_logger.error("音频处理错误: {}".format(e))
 
 def set_vad_playing(playing):
     """设置VAD播放状态"""
@@ -212,9 +183,6 @@ def play_worker():
             # system_logger.debug("[语音播放]:{}".format(path))
             data, samplerate = sf.read(path)
             
-            # 将播放的音频发送给相似度检测系统
-            play_audio_with_similarity_detection(data, samplerate)
-
             # 开始播放
             sd.play(data, samplerate)
 
@@ -261,7 +229,6 @@ def submit_text(text, response_speaker="unknown"):
     cleaned_text = cleaner.clean(text)
     
     if cleaned_text:
-        # 修改：将文本和说话人信息作为一个元组放入队列
         text_queue.put((cleaned_text, response_speaker))
     else:
         system_logger.warning("Clean Text cause not text to submit.")

@@ -16,7 +16,6 @@ from collections import deque
 from vad_controller import VadController
 from asr import WhisperASR, TransformersASR, FasterWhisperASR
 from tts_playback import stop_playback_flag, audio_queue, text_queue
-from audio_similarity_detector import AudioSimilarityDetector
 from logger_config import system_logger
 from config_manager import config_manager
 
@@ -37,11 +36,9 @@ class AudioManager:
         # self.asr = WhisperASR()
         # self.asr = TransformersASR()
         self.asr = FasterWhisperASR()
-        self.enable_similarity_detector = False
+
         
-        if self.enable_similarity_detector:
-            self.similarity_detector = AudioSimilarityDetector(sample_rate=RATE)  # 新增相似度检测器
-            
+
     def start_listening(self):
         self.running = True
         self.thread = threading.Thread(target=self._listen_loop)
@@ -54,16 +51,6 @@ class AudioManager:
     def set_vad_sensitivity(self, sensitivity: float):
         """设置 VAD 敏感度"""
         self.vad_controller.set_sensitivity(sensitivity)
-        
-    def add_playback_audio(self, audio_data):
-        """供外部调用，添加播放音频用于相似度检测"""
-        if self.enable_similarity_detector:
-            self.similarity_detector.add_playback_audio(audio_data)
-            
-    def set_similarity_threshold(self, threshold: float):
-        """设置相似度阈值"""
-        if self.enable_similarity_detector:
-            self.similarity_detector.similarity_threshold = max(0.0, min(1.0, threshold))
             
     def _listen_loop(self):
         p = pyaudio.PyAudio()
@@ -113,21 +100,8 @@ class AudioManager:
                     head_buffer = list(audio_buffer)
                     recording = True
                     
-                    # 检查是否与播放音频相似
-                    is_similar = False
-                    if self.enable_similarity_detector:
-                        is_similar, similarity_score = self.similarity_detector.is_similar_to_playback(audio_np)
-                        
-                    if is_similar:
-                        system_logger.info("检测到可能是播放的音频回声 (相似度: {:.3f})，跳过打断".format(similarity_score))
-                        # 重置状态，不进行打断操作
-                        recording = False
-                        speech_buffer = []
-                        silence_frames = 0
-                        continue
-                    else:
-                        # 真正的用户语音，执行打断操作
-                        self._interrupt_tts()
+                    # 真正的用户语音，执行打断操作
+                    self._interrupt_tts()
                         
                 speech_buffer.append(data)
                 silence_frames = 0
@@ -140,36 +114,27 @@ class AudioManager:
                         system_logger.info("检测到说话结束，开始识别...")
                         
                         final_audio = list(head_buffer) + speech_buffer
-                        
-                        # 再次检查整个语音片段是否与播放音频相似
-                        final_audio_np = np.frombuffer(b''.join(final_audio), dtype=np.int16).astype(np.float32) / 32768.0
-                        
-                        is_similar = False
-                        if self.enable_similarity_detector:
-                            is_similar, similarity_score = self.similarity_detector.is_similar_to_playback(final_audio_np)
+
+
+                        # 保存为 WAV 文件
+                        filename = "temp.wav"
+                        with wave.open(filename, 'wb') as wf:
+                            wf.setnchannels(CHANNELS)
+                            wf.setsampwidth(p.get_sample_size(FORMAT))
+                            wf.setframerate(RATE)
+                            wf.writeframes(b''.join(final_audio))
                             
-                        if is_similar:
-                            system_logger.info("语音片段与播放音频相似 (相似度: {:.3f})，跳过识别".format(similarity_score))
-                        else:
-                            # 保存为 WAV 文件
-                            filename = "temp.wav"
-                            with wave.open(filename, 'wb') as wf:
-                                wf.setnchannels(CHANNELS)
-                                wf.setsampwidth(p.get_sample_size(FORMAT))
-                                wf.setframerate(RATE)
-                                wf.writeframes(b''.join(final_audio))
-                                
-                            # 调用 Whisper 识别
-                            try:
-                                text = self.asr.transcribe(
-                                    filename,
-                                    language="zh",
-                                    prompt=config_manager.get('asr_prompt')
-                                )
-                                system_logger.info("识别结果：{}".format(text))
-                                self.result_queue.put(text)
-                            except Exception as e:
-                                system_logger.error("识别失败：{}".format(e))
+                        # 调用 Whisper 识别
+                        try:
+                            text = self.asr.transcribe(
+                                filename,
+                                language="zh",
+                                prompt=config_manager.get('asr_prompt')
+                            )
+                            system_logger.info("识别结果：{}".format(text))
+                            self.result_queue.put(text)
+                        except Exception as e:
+                            system_logger.error("识别失败：{}".format(e))
                                 
                         # 重置状态
                         recording = False

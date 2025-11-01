@@ -59,16 +59,22 @@ class VadController:
     def set_playing(self, playing: bool):
         """异步设置播放状态"""
         try:
-            self._command_queue.put(('set_playing', playing), block=False)
+            # 使用带超时的阻塞操作，避免队列满时丢失命令
+            self._command_queue.put(('set_playing', playing), timeout=0.1)
         except queue.Full:
-            system_logger.warning("VAD 控制命令队列已满")
+            system_logger.warning("VAD 控制命令队列已满，丢弃命令")
+        except Exception as e:
+            system_logger.error("VAD 控制命令发送失败: {}".format(e))
             
     def set_sensitivity(self, value: float):
         """异步设置敏感度"""
         try:
-            self._command_queue.put(('set_sensitivity', value), block=False)
+            # 使用带超时的阻塞操作，避免队列满时丢失命令
+            self._command_queue.put(('set_sensitivity', value), timeout=0.1)
         except queue.Full:
-            system_logger.warning("VAD 控制命令队列已满")
+            system_logger.warning("VAD 控制命令队列已满，丢弃命令")
+        except Exception as e:
+            system_logger.error("VAD 控制命令发送失败: {}".format(e))
             
     def get_threshold(self):
         with self._lock:
