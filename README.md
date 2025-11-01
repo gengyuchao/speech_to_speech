@@ -42,6 +42,7 @@ conda activate speech_assistant
 
 ```bash
 sudo apt install libaio-dev
+sudo apt-get install portaudio19-dev ffmpeg
 ```
 
 ### 2️⃣ 下载模型文件

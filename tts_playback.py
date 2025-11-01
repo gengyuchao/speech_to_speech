@@ -14,27 +14,23 @@ import soundfile as sf
 import uuid
 import os
 import time
-import yaml
 import threading
 # from indextts.infer import IndexTTS
 from indextts.infer_v2 import IndexTTS2
 from text_cleaner import TextCleaner
 from logger_config import system_logger
-
-# 加载配置文件
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+from config_manager import config_manager
 
 # 提取配置项
-tts_model_dir = config["tts"]["model_dir"]
-tts_cfg_path = config["tts"]["cfg_path"]
-cache_dir = config["tts"]["cache_dir"]
-tts_kwargs = config["tts"]["kwargs"]
-SPEAKER_VOICES = config["speaker_voices"]
-vad_sensitivity = config["vad"]["sensitivity"]
-silence_threshold = config["silence_detection"]["silence_threshold"]
-min_silence_len = config["silence_detection"]["min_silence_len"]
-worker_counter_start = config["worker_counter_start"]
+tts_model_dir = config_manager.get('tts.model_dir')
+tts_cfg_path = config_manager.get('tts.cfg_path')
+cache_dir = config_manager.get('tts.cache_dir')
+tts_kwargs = config_manager.get('tts.kwargs')
+SPEAKER_VOICES = config_manager.get('speaker_voices')
+vad_sensitivity = config_manager.get('vad.sensitivity')
+silence_threshold = config_manager.get('silence_detection.silence_threshold')
+min_silence_len = config_manager.get('silence_detection.min_silence_len')
+worker_counter_start = config_manager.get('worker_counter_start')
 
 cleaner = TextCleaner()
 
@@ -131,8 +127,8 @@ def calculate_silence_ratio(file_path, silence_threshold=-50, min_silence_len=1)
     # 检测所有静音段
     silence_periods = detect_silence(
         audio,
-        min_silence_len=config['silence_detection']['min_silence_len'],
-        silence_thresh=config['silence_detection']['silence_threshold'],
+        min_silence_len=config_manager.get('silence_detection.min_silence_len'),
+        silence_thresh=config_manager.get('silence_detection.silence_threshold'),
         seek_step=1
     )
     
@@ -173,7 +169,7 @@ def tts_worker():
         total_time = first_infer_time
         
         retry_count = 0
-        while calculate_silence_ratio(output_path) > config['audio_similarity']['silence_ratio_threshold']:
+        while calculate_silence_ratio(output_path) > config_manager.get('audio_similarity.silence_ratio_threshold'):
             system_logger.info("发现异常语音，静音比例{}，重新生成".format(calculate_silence_ratio(output_path)))
             retry_count += 1
             retry_start_time = time.time()

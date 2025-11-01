@@ -2,11 +2,10 @@
 
 import numpy as np
 from collections import deque
-import yaml
+from config_manager import config_manager
 
 # 从配置文件导入参数
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+# 使用统一配置管理器
 
 class AudioSimilarityDetector:
     def __init__(self, sample_rate=16000, buffer_duration=2.0):

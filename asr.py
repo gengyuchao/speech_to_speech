@@ -3,18 +3,17 @@
 from faster_whisper import WhisperModel
 import wave
 import torch
-import yaml
 from logger_config import system_logger
+from config_manager import config_manager
 
 # 从配置文件导入参数
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+# 使用统一配置管理器
 
 class WhisperASR:
     def __init__(self, model_name="turbo"):
         self.model = whisper.load_model(model_name)
 
-    def transcribe(self, audio_file, language="zh", prompt=config['asr_prompt']):
+    def transcribe(self, audio_file, language="zh", prompt=config_manager.get('asr_prompt')):
         result = self.model.transcribe(audio_file, language=language, prompt=prompt)
         return result["text"]
 
@@ -23,7 +22,7 @@ class FasterWhisperASR:
     def __init__(self, model_name="large-v3-turbo"):
         self.model = WhisperModel(model_name, device="cuda", compute_type="int8_float16") # "float16"
 
-    def transcribe(self, audio_file, language="zh", prompt=config['asr_prompt']):
+    def transcribe(self, audio_file, language="zh", prompt=config_manager.get('asr_prompt')):
         segments, info =  self.model.transcribe(audio_file, language=language, initial_prompt=prompt, beam_size=5)
         result = ""
         for segment in segments:
@@ -46,7 +45,7 @@ class TransformersASR:
         """
         # 如果没有指定模型路径，则使用配置文件中的路径
         if model_path is None:
-            model_path = config['asr']['model_path']
+            model_path = config_manager.get('asr.model_path')
         
         # 自动选择设备：如果未指定且CUDA可用则使用GPU，否则使用CPU
         if device is None:

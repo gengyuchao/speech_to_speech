@@ -18,17 +18,16 @@ from asr import WhisperASR, TransformersASR, FasterWhisperASR
 from tts_playback import stop_playback_flag, audio_queue, text_queue
 from audio_similarity_detector import AudioSimilarityDetector
 from logger_config import system_logger
+from config_manager import config_manager
 
 # 从配置文件导入参数
-import yaml
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+# 使用统一配置管理器
 
 FORMAT = pyaudio.paInt16
-CHANNELS = config['audio']['channels']
-RATE = config['audio']['rate']
-CHUNK = config['audio']['chunk']
-SILENCE_FRAME_THRESHOLD = config['audio']['silence_frame_threshold']
+CHANNELS = config_manager.get('audio.channels')
+RATE = config_manager.get('audio.rate')
+CHUNK = config_manager.get('audio.chunk')
+SILENCE_FRAME_THRESHOLD = config_manager.get('audio.silence_frame_threshold')
 
 class AudioManager:
     def __init__(self, result_queue: queue.Queue):
@@ -165,7 +164,7 @@ class AudioManager:
                                 text = self.asr.transcribe(
                                     filename,
                                     language="zh",
-                                    prompt=config['asr_prompt']
+                                    prompt=config_manager.get('asr_prompt')
                                 )
                                 system_logger.info("识别结果：{}".format(text))
                                 self.result_queue.put(text)

@@ -14,18 +14,14 @@ from concurrent.futures import ThreadPoolExecutor
 from sentence_segmenter import SentenceSegmenter
 from datetime import datetime, timedelta
 from logger_config import system_logger
-
-# 从配置文件导入参数
-import yaml
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+from config_manager import config_manager
 
 # 全局工具初始化
 segmenter = SentenceSegmenter()
 executor = ThreadPoolExecutor(max_workers=1)
-default_model = config['ollama']['model']
-history_max = config['ollama']['max_history']
-history_compress_interval = config['ollama']['compress_interval']
+default_model = config_manager.get('ollama.model')
+history_max = config_manager.get('ollama.max_history')
+history_compress_interval = config_manager.get('ollama.compress_interval')
 
 class ChatHistoryManager:
     def __init__(self, model: str = "deepseek-r1", max_history: int = history_max, compress_interval: int = history_compress_interval):
@@ -132,20 +128,20 @@ def stream_chat(prompt: str, model: str = default_model, speaker_id: str = "unkn
     
     # 系统提示
     system_prompt = [
-        {"role": "system", "content": config['ai_prompts']['system_role'].format(speaker_id=speaker_id)},
-        {"role": "system", "content": config['ai_prompts']['speaking_format']},
-        {"role": "system", "content": config['ai_prompts']['speaker_format']},
-        {"role": "system", "content": config['ai_prompts']['example'].format(speaker_id=speaker_id)},
-        {"role": "system", "content": config['ai_prompts']['natural_response']},
-        {"role": "system", "content": config['ai_prompts']['silence_if_irrelevant']},
-        {"role": "system", "content": config['ai_prompts']['silence_if_not_spoken_to']},
+        {"role": "system", "content": config_manager.get('ai_prompts.system_role').format(speaker_id=speaker_id)},
+        {"role": "system", "content": config_manager.get('ai_prompts.speaking_format')},
+        {"role": "system", "content": config_manager.get('ai_prompts.speaker_format')},
+        {"role": "system", "content": config_manager.get('ai_prompts.example').format(speaker_id=speaker_id)},
+        {"role": "system", "content": config_manager.get('ai_prompts.natural_response')},
+        {"role": "system", "content": config_manager.get('ai_prompts.silence_if_irrelevant')},
+        {"role": "system", "content": config_manager.get('ai_prompts.silence_if_not_spoken_to')},
     ]
     
     # 环境提示（时间）
     if last_time is None or (local_time - last_time) > timedelta(minutes=10):
         environment_prompt = [{
             "role": "system",
-            "content": config['ai_prompts']['time_context'].format(current_time=formatted_local)
+            "content": config_manager.get('ai_prompts.time_context').format(current_time=formatted_local)
         }]
         last_time = local_time
     else:

@@ -5,15 +5,11 @@
 """
 import os
 import sys
-import yaml
 import threading
 import queue
 import time
 from logger_config import system_logger
-
-# 导入配置模块
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+from config_manager import config_manager
 
 # 系统初始化
 import ollama_stream
