@@ -36,9 +36,8 @@
 ```bash
 git clone https://github.com/gengyuchao/speech_to_speech.git
 cd speech_to_speech
-git checkout dev/high_quality_main
 conda env create -f environment.yml
-conda activate speech_assistant
+conda activate realtime_ai
 ```
 
 ```bash
@@ -54,15 +53,16 @@ ollama pull gemma3:27b
 ollama pull deepseek-r1
 ```
 
-- 下载 Whisper 模型（默认为 `large-v3`）：
+- 下载 faster_whisper 模型（默认为 `large-v3-turbo`）：
 ```bash
-# 默认由 Whisper 自动下载，也可以手动指定路径
+# 默认由 faster_whisper 自动下载，也可以手动指定路径
 ```
 
 - 下载 Silero VAD 模型（会自动加载）：
 
 ```bash
 torch.hub.load(repo_or_dir='snakers4/silero-vad', model='silero_vad')
+# 默认自动下载，也可以手动指定路径
 ```
 
 - Index-TTS 需要你自行配置模型目录和配置文件。
@@ -214,28 +214,46 @@ python main.py
 
 ```bash
 .
-├── main.py                 # 主程序入口
-├── ollama_stream.py        # LLM 对话逻辑与流式输出处理
+├── asr.py                  # 语音识别模块
 ├── audio_manager.py        # 音频采集、识别、打断控制
-├── sentence_segmenter.py   # 中文句子分割 + 说话人结构解析
-├── text_cleaner.py         # 文本清理规则（去除特殊符号）
-├── tts_queue.py            # TTS 队列管理与播放线程
-├── vad_controller.py       # VAD 控制器，支持动态调整敏感度
+├── config_manager.py
 ├── config.yaml             # 系统配置文件
 ├── environment.yml         # Conda 环境配置文件
-├── asr.py                  # 语音识别模块
+├── history.json
+├── LICENSE
 ├── logger_config.py        # 日志配置模块
-└── requirements.txt        # Python 依赖项（供参考）
+├── logs
+│   └── system.log
+├── main.py                 # 主程序入口
+├── ollama_stream.py        # LLM 对话逻辑与流式输出处理
+├── README.md
+├── requirements.txt        # Python 依赖项（供参考）
+├── resources
+│   ├── Belle-whisper-large-v3-turbo-zh # 中文专用 whisper 模型
+│   ├── checkpoints         # index-TTS2 的模型 checkpoints
+│   └── voice               # 声音音色资源
+├── sentence_segmenter.py   # 中文句子分割 + 说话人结构解析
+├── snakers4                # VAD 模型
+│   └── silero-vad
+├── text_cleaner.py         # 文本清理规则（去除特殊符号）
+├── tts_playback.py         # TTS 队列管理与播放线程
+└── vad_controller.py       # VAD 控制器，支持动态调整敏感度
+
 ```
 
 ---
 
 ## 🛠️ 扩展建议
 
-- ✅ 添加更多角色音色支持（如：女声、男声、不同年龄段）
-- ✅ 支持多语言模型切换
-- ✅ 增加 Web UI 界面或 Telegram Bot 接口
+- ✅ 增加 Web UI 界面
 - ✅ 支持语音转文字后自动翻译成英文等
+- ✅ 支持 Deepseek ocr 视觉识别
+- ✅ 支持 webrtc 回声消除
+- ✅ 支持 MCP 操作指令，实现读取文件，访问网络等功能
+
+## 效果演示
+
+[![视频演示](https://i1.hdslb.com/bfs/archive/f3a94467ff18cf7766683bae647d9cf6d3c60454.jpg@308w_174h)](https://www.bilibili.com/video/BV1fjbMzyE1e)
 
 ---
 
@@ -258,3 +276,4 @@ MIT License. See `LICENSE` for more information。
 ---
 
 > 💡 **提示**：建议配合耳机/音响使用，以获得更好的语音体验。
+
